@@ -19,7 +19,7 @@ const firebaseConfig = {
 // ════════════════════════════════════════════════════════
 
 // UID de l'administrateur (récupérez-le depuis Firebase Auth après votre 1ère connexion)
-const ADMIN_UID = "VOTRE_UID_ADMIN_ICI";
+const ADMIN_UID = "bRFQlTk8OSQNCwf5S9NugcLyek42";
 
 // Adresse USDT TRC20 pour recevoir les paiements
 const USDT_WALLET = "TMT7M2dzukXgqmD5nbMXK8hhZaxR5SKVH9";
