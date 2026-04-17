@@ -198,6 +198,11 @@ function showScreen(name) {
 }
 
 function showSection(name) {
+  // Bloquer l'accès admin aux non-admins
+  if (name === 'admin' && !userProfile?.isAdmin) {
+    showToast('Accès réservé à l\'administrateur.', 'error');
+    return;
+  }
   document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
   const t = document.getElementById(`section-${name}`);
   if (t) t.classList.add('active');
@@ -244,7 +249,8 @@ function renderApp() {
     badge.className = 'sub-badge expired';
   }
 
-  // Admin nav
+  // Admin nav — toujours masquer d'abord, puis afficher uniquement pour l'admin
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
   if (userProfile.isAdmin) {
     document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
   }
@@ -749,8 +755,15 @@ async function submitPayment() {
 // ════════════════════════════════════════════════════════
 
 async function renderAdmin() {
-  if (!userProfile?.isAdmin) return;
-  await Promise.all([loadAdminPerf(), loadUsers(), loadPendingPayments()]);
+  if (!userProfile?.isAdmin) {
+    showToast('Accès refusé.', 'error');
+    showSection('journal');
+    return;
+  }
+  // Lancer les listeners temps réel
+  loadAdminPerf();
+  loadUsers();
+  loadPendingPayments();
 }
 
 // ── Performances Admin ──
@@ -806,21 +819,42 @@ async function deleteAdminPerf(id) {
   showToast('Supprimé.', 'success');
 }
 
-// ── Utilisateurs ──
+// ── Utilisateurs (temps réel) ──
 let allUsers = [];
+let usersUnsubscribe = null;
 
-async function loadUsers() {
-  const snap = await db.collection('users').orderBy('createdAt', 'desc').get();
-  allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+function loadUsers() {
+  if (usersUnsubscribe) usersUnsubscribe();
 
-  // Charger trade counts
-  await Promise.all(allUsers.map(async u => {
-    const ts = await db.collection('users').doc(u.uid).collection('trades').get();
-    u.tradeCount = ts.size;
-    u.totalPnl   = ts.docs.reduce((a, d2) => a + (parseFloat(d2.data().pnl) || 0), 0);
-  }));
+  usersUnsubscribe = db.collection('users')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(async snap => {
+      // Récupérer les données de base de tous les utilisateurs
+      const users = snap.docs.map(d => {
+        const data = d.data();
+        // S'assurer que uid est bien défini (utiliser l'id du document si uid manquant)
+        return { ...data, uid: data.uid || d.id, docId: d.id };
+      });
 
-  renderUsersTable(allUsers);
+      // Charger le nombre de trades et le P&L total pour chaque utilisateur
+      await Promise.all(users.map(async u => {
+        try {
+          const ts = await db.collection('users').doc(u.docId).collection('trades').get();
+          u.tradeCount = ts.size;
+          u.totalPnl   = ts.docs.reduce((a, d2) => a + (parseFloat(d2.data().pnl) || 0), 0);
+        } catch(e) {
+          u.tradeCount = 0;
+          u.totalPnl   = 0;
+        }
+      }));
+
+      allUsers = users;
+      renderUsersTable(allUsers);
+    }, err => {
+      console.error('Erreur chargement utilisateurs:', err);
+      const tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Erreur: ${err.message}</td></tr>`;
+    });
 }
 
 document.getElementById('admin-search-user').addEventListener('input', filterUsers);
@@ -841,20 +875,32 @@ function renderUsersTable(users) {
   const tbody = document.getElementById('users-tbody');
   tbody.innerHTML = '';
   if (!users.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Aucun utilisateur.</td></tr>'; return;
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Aucun utilisateur inscrit.</td></tr>'; return;
   }
   users.forEach(u => {
     const tr = document.createElement('tr');
-    const subEnd = u.subEnd ? (u.subEnd.toDate ? u.subEnd.toDate() : new Date(u.subEnd)).toLocaleDateString('fr-FR') : '—';
+    const subEnd = u.subEnd
+      ? (u.subEnd.toDate ? u.subEnd.toDate() : new Date(u.subEnd)).toLocaleDateString('fr-FR')
+      : '—';
     const statusBadge = {
-      trial: '<span style="color:var(--warning)">Essai</span>',
-      active: '<span style="color:var(--positive)">Actif</span>',
-      expired: '<span style="color:var(--negative)">Expiré</span>',
-      pending: '<span style="color:var(--info)">En attente</span>',
+      trial:   '<span style="color:var(--warning)">⏳ Essai</span>',
+      active:  '<span style="color:var(--positive)">✅ Actif</span>',
+      expired: '<span style="color:var(--negative)">❌ Expiré</span>',
+      pending: '<span style="color:var(--info)">🕐 En attente</span>',
+      admin:   '<span style="color:var(--accent)">🛡️ Admin</span>',
     }[u.subStatus] || u.subStatus;
 
+    // Utiliser docId (= uid) pour les actions Firestore
+    const uid = u.docId;
+    const isAdminUser = u.isAdmin || uid === ADMIN_UID;
+
     tr.innerHTML = `
-      <td><img src="${u.photoURL||''}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px"/>${u.displayName||'—'}</td>
+      <td>
+        <img src="${u.photoURL||''}" 
+             onerror="this.style.display='none'"
+             style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px"/>
+        ${u.displayName||'—'}
+      </td>
       <td>${u.email||'—'}</td>
       <td>${u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString('fr-FR') : '—'}</td>
       <td>${statusBadge}</td>
@@ -863,8 +909,11 @@ function renderUsersTable(users) {
       <td class="${(u.totalPnl||0) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${fmtPnl(u.totalPnl||0)}</td>
       <td>
         <div class="action-btns">
-          <button class="btn-approve" onclick="activateSubscription('${u.uid}')">✅ Activer</button>
-          <button class="btn-reject" onclick="revokeSubscription('${u.uid}')">🚫 Révoquer</button>
+          ${isAdminUser
+            ? '<span style="color:var(--text3);font-size:0.75rem">Admin</span>'
+            : `<button class="btn-approve" onclick="activateSubscription('${uid}')">✅ Activer</button>
+               <button class="btn-reject"  onclick="revokeSubscription('${uid}')">🚫 Révoquer</button>`
+          }
         </div>
       </td>`;
     tbody.appendChild(tr);
@@ -900,35 +949,55 @@ async function revokeSubscription(uid) {
   }
 }
 
-// ── Paiements en attente ──
-async function loadPendingPayments() {
-  const snap = await db.collection('users')
+// ── Paiements en attente (temps réel) ──
+let pendingUnsubscribe = null;
+
+function loadPendingPayments() {
+  if (pendingUnsubscribe) pendingUnsubscribe();
+
+  pendingUnsubscribe = db.collection('users')
     .where('subStatus', '==', 'pending')
-    .get();
+    .onSnapshot(snap => {
+      const container = document.getElementById('pending-payments-list');
+      container.innerHTML = '';
 
-  const container = document.getElementById('pending-payments-list');
-  container.innerHTML = '';
+      if (snap.empty) {
+        container.innerHTML = '<p style="color:var(--text3);padding:12px">✅ Aucune demande de paiement en attente.</p>';
+        return;
+      }
 
-  if (snap.empty) {
-    container.innerHTML = '<p style="color:var(--text3)">Aucune demande en attente. ✅</p>'; return;
-  }
+      snap.docs.forEach(d => {
+        const u = d.data();
+        const docId = d.id; // L'id du document = uid de l'utilisateur
+        const pendingDate = u.pendingAt
+          ? (u.pendingAt.toDate ? u.pendingAt.toDate() : new Date(u.pendingAt)).toLocaleString('fr-FR')
+          : '—';
 
-  snap.docs.forEach(d => {
-    const u = d.data();
-    const div = document.createElement('div');
-    div.className = 'pending-item';
-    div.innerHTML = `
-      <div class="user-info-text">
-        <strong>${u.displayName||'—'}</strong><br/>
-        <span style="color:var(--text2);font-size:0.78rem">${u.email||'—'}</span>
-      </div>
-      <div class="tx-info">TX: ${u.pendingTxHash || '—'}</div>
-      <div class="action-btns">
-        <button class="btn-approve" onclick="activateSubscription('${u.uid}')">✅ Approuver</button>
-        <button class="btn-reject" onclick="rejectPayment('${u.uid}')">❌ Refuser</button>
-      </div>`;
-    container.appendChild(div);
-  });
+        const div = document.createElement('div');
+        div.className = 'pending-item';
+        div.innerHTML = `
+          <div class="user-info-text">
+            <strong>${u.displayName || '—'}</strong>
+            <br/>
+            <span style="color:var(--text2);font-size:0.78rem">${u.email || '—'}</span>
+            <br/>
+            <span style="color:var(--text3);font-size:0.72rem">Soumis le : ${pendingDate}</span>
+          </div>
+          <div class="tx-info">
+            <span style="color:var(--text2);font-size:0.72rem">Hash TX :</span><br/>
+            ${u.pendingTxHash || '<em style="color:var(--text3)">Non fourni</em>'}
+          </div>
+          <div class="action-btns">
+            <button class="btn-approve" onclick="activateSubscription('${docId}')">✅ Approuver</button>
+            <button class="btn-reject"  onclick="rejectPayment('${docId}')">❌ Refuser</button>
+          </div>`;
+        container.appendChild(div);
+      });
+    }, err => {
+      console.error('Erreur paiements en attente:', err);
+      document.getElementById('pending-payments-list').innerHTML =
+        `<p style="color:var(--negative)">Erreur: ${err.message}</p>`;
+    });
 }
 
 async function rejectPayment(uid) {
