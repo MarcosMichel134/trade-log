@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TradeLog — Journal de Trading</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+</head>
+<body> 
+
+<!-- ═══════════════ ÉCRAN DE CONNEXION ═══════════════ -->
+<div id="auth-screen" class="screen active">
+  <div class="auth-bg">
+    <div class="grid-lines"></div>
+    <div class="glow-orb"></div>
+  </div>
+  <div class="auth-card">
+    <div class="logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">TradeLog</span>
+    </div>
+    <p class="auth-tagline">Votre journal de trading professionnel</p>
+    <button id="google-signin-btn" class="btn-google">
+      <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M5.27 9.76A7.08 7.08 0 0 1 19 8h.07l3.7-3.7A12 12 0 0 0 .38 8.56l4.89 1.2Z"/><path fill="#34A853" d="m5.28 14.23-4.9 1.21A12 12 0 0 0 12 24a11.9 11.9 0 0 0 8.26-3.3l-4.62-3.58a7.07 7.07 0 0 1-10.36-2.9Z"/><path fill="#FBBC04" d="M19.07 8H12v5h7a7.1 7.1 0 0 1-2.4 3.12l4.63 3.59A12 12 0 0 0 24 12c0-.8-.08-1.57-.23-2.31a12.1 12.1 0 0 0-.47-1.69H19.07Z"/><path fill="#4285F4" d="M5.27 9.76A7.1 7.1 0 0 0 4.93 12c0 .77.12 1.52.35 2.23L.38 15.44A12 12 0 0 1 0 12C0 10.35.28 8.77.77 7.31l4.5 2.45Z"/></svg>
+      Continuer avec Google
+    </button>
+    <p class="auth-note">Essai gratuit de 2 semaines · Abonnement 10 USDT/mois</p>
+  </div>
+</div>
+
+<!-- ═══════════════ APP PRINCIPALE ═══════════════ -->
+<div id="app-screen" class="screen">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">◈</span>
+      <span class="logo-text">TradeLog</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="journal">
+        <span class="nav-icon">📒</span> Journal
+      </a>
+      <a href="#" class="nav-item" data-section="performance">
+        <span class="nav-icon">📈</span> Performances
+      </a>
+      <a href="#" class="nav-item" data-section="subscription" id="nav-subscription">
+        <span class="nav-icon">💎</span> Abonnement
+      </a>
+      <a href="#" class="nav-item admin-only hidden" data-section="admin">
+        <span class="nav-icon">🛡️</span> Admin
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <img id="user-avatar" src="" alt="Avatar" class="avatar"/>
+        <div class="user-details">
+          <span id="user-name" class="user-name-text"></span>
+          <span id="sub-badge" class="sub-badge"></span>
+        </div>
+      </div>
+      <button id="logout-btn" class="btn-logout" title="Déconnexion">⏻</button>
+    </div>
+  </aside>
+
+  <!-- CONTENU PRINCIPAL -->
+  <main class="main-content">
+
+    <!-- ── SECTION JOURNAL ── -->
+    <section id="section-journal" class="content-section active">
+      <div class="section-header">
+        <h1>Journal de Trading</h1>
+        <div class="header-actions">
+          <button id="add-trade-btn" class="btn-primary">+ Ajouter un trade</button>
+          <button id="export-btn" class="btn-secondary">⬇ Exporter CSV</button>
+        </div>
+      </div>
+
+      <!-- Bannière abonnement -->
+      <div id="trial-banner" class="trial-banner hidden"></div>
+      <div id="expired-banner" class="expired-banner hidden">
+        🔒 Votre période d'essai est terminée. <a href="#" class="subscribe-link" data-section="subscription">Abonnez-vous</a> pour continuer à modifier votre journal.
+      </div>
+
+      <!-- Filtres -->
+      <div class="filters-bar">
+        <input type="text" id="search-filter" placeholder="Rechercher..." class="filter-input"/>
+        <select id="pair-filter" class="filter-select"><option value="">Toutes paires</option></select>
+        <select id="result-filter" class="filter-select">
+          <option value="">Tous résultats</option>
+          <option value="win">✅ Gain</option>
+          <option value="loss">❌ Perte</option>
+          <option value="be">➖ Break-even</option>
+        </select>
+        <input type="date" id="date-from" class="filter-input" title="Du"/>
+        <input type="date" id="date-to" class="filter-input" title="Au"/>
+        <button id="clear-filters" class="btn-ghost">✕ Effacer</button>
+      </div>
+
+      <!-- Tableau -->
+      <div class="table-wrapper">
+        <table class="trades-table" id="trades-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Paire</th>
+              <th>Direction</th>
+              <th>Entrée</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>Sortie</th>
+              <th>Taille (lots)</th>
+              <th>P&L ($)</th>
+              <th>R:R</th>
+              <th>Résultat</th>
+              <th>Stratégie</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trades-tbody">
+            <tr class="empty-row">
+              <td colspan="14">Aucun trade enregistré. Ajoutez votre premier trade !</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="table-stats" class="table-stats"></div>
+    </section>
+
+    <!-- ── SECTION PERFORMANCES ── -->
+    <section id="section-performance" class="content-section">
+      <div class="section-header">
+        <h1>Mes Performances</h1>
+        <select id="perf-period" class="filter-select">
+          <option value="all">Tout le temps</option>
+          <option value="week">Cette semaine</option>
+          <option value="month">Ce mois</option>
+          <option value="3months">3 derniers mois</option>
+        </select>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">P&L Total</span>
+          <span class="kpi-value" id="kpi-pnl">$0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Win Rate</span>
+          <span class="kpi-value" id="kpi-winrate">0%</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Trades totaux</span>
+          <span class="kpi-value" id="kpi-total">0</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Meilleur trade</span>
+          <span class="kpi-value positive" id="kpi-best">$0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Pire trade</span>
+          <span class="kpi-value negative" id="kpi-worst">$0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">R:R moyen</span>
+          <span class="kpi-value" id="kpi-rr">0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Profit Factor</span>
+          <span class="kpi-value" id="kpi-pf">0.00</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Série gagnante max</span>
+          <span class="kpi-value" id="kpi-streak">0</span>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Courbe de capital</h3>
+          <canvas id="equity-chart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Répartition gains/pertes</h3>
+          <canvas id="pie-chart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>P&L par paire</h3>
+          <canvas id="pair-chart"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>P&L par jour de semaine</h3>
+          <canvas id="weekday-chart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION ABONNEMENT ── -->
+    <section id="section-subscription" class="content-section">
+      <div class="section-header"><h1>Abonnement</h1></div>
+      <div class="sub-container">
+        <div class="sub-card">
+          <div class="sub-icon">💎</div>
+          <h2>TradeLog Pro</h2>
+          <div class="sub-price">10 <span>USDT</span> <small>/mois</small></div>
+          <ul class="sub-features">
+            <li>✅ Journal illimité</li>
+            <li>✅ Analyses avancées</li>
+            <li>✅ Export CSV</li>
+            <li>✅ Accès prioritaire aux nouvelles fonctions</li>
+          </ul>
+          <div id="sub-status-display" class="sub-status-display"></div>
+          <div class="payment-section" id="payment-section">
+            <h3>Paiement en USDT (TRC20)</h3>
+            <div class="wallet-box">
+              <code id="wallet-address" class="wallet-addr">TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx</code>
+              <button id="copy-wallet" class="btn-copy">📋 Copier</button>
+            </div>
+            <p class="payment-note">Envoyez exactement <strong>10 USDT</strong> sur le réseau <strong>TRC20 (TRON)</strong>.</p>
+            <div class="tx-submit">
+              <input type="text" id="tx-hash" placeholder="Hash de la transaction (ex: abc123...)" class="filter-input full-width"/>
+              <button id="submit-payment-btn" class="btn-primary">Soumettre le paiement</button>
+            </div>
+            <p class="payment-info">⚠️ L'activation est manuelle. Un admin vérifiera votre transaction sous 24h.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SECTION ADMIN ── -->
+    <section id="section-admin" class="content-section admin-only hidden">
+      <div class="section-header">
+        <h1>🛡️ Espace Administrateur</h1>
+      </div>
+
+      <!-- Mes performances admin -->
+      <div class="admin-block">
+        <h2>Mes performances (visibles par les utilisateurs)</h2>
+        <div class="admin-perf-form">
+          <input type="text" id="admin-period-label" placeholder="Période (ex: Avril 2025)" class="filter-input"/>
+          <input type="number" id="admin-winrate" placeholder="Win Rate (%)" class="filter-input" step="0.1"/>
+          <input type="number" id="admin-pnl" placeholder="P&L ($)" class="filter-input" step="0.01"/>
+          <input type="number" id="admin-trades" placeholder="Nb trades" class="filter-input"/>
+          <input type="number" id="admin-rr" placeholder="R:R moyen" class="filter-input" step="0.01"/>
+          <button id="save-admin-perf" class="btn-primary">💾 Sauvegarder</button>
+        </div>
+        <div id="admin-perf-list" class="admin-perf-list"></div>
+      </div>
+
+      <!-- Gestion utilisateurs -->
+      <div class="admin-block">
+        <h2>Gestion des utilisateurs</h2>
+        <div class="filters-bar">
+          <input type="text" id="admin-search-user" placeholder="Rechercher un utilisateur..." class="filter-input"/>
+          <select id="admin-filter-sub" class="filter-select">
+            <option value="">Tous</option>
+            <option value="trial">Essai</option>
+            <option value="active">Abonné</option>
+            <option value="expired">Expiré</option>
+            <option value="pending">En attente</option>
+          </select>
+        </div>
+        <div class="table-wrapper">
+          <table class="trades-table" id="users-table">
+            <thead>
+              <tr>
+                <th>Utilisateur</th>
+                <th>Email</th>
+                <th>Inscrit le</th>
+                <th>Statut</th>
+                <th>Fin d'abonnement</th>
+                <th>Trades</th>
+                <th>P&L</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr class="empty-row"><td colspan="8">Chargement…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Demandes de paiement en attente -->
+      <div class="admin-block">
+        <h2>Demandes de paiement en attente</h2>
+        <div id="pending-payments-list" class="pending-list">Chargement…</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════ MODAL TRADE ═══════════════ -->
+<div id="trade-modal" class="modal hidden">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modal-title">Ajouter un Trade</h2>
+      <button class="modal-close" id="modal-close-btn">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Date & Heure *</label>
+          <input type="datetime-local" id="f-date" class="form-input" required/>
+        </div>
+        <div class="form-group">
+          <label>Paire *</label>
+          <input type="text" id="f-pair" class="form-input" placeholder="BTC/USD, EUR/USD…" required/>
+        </div>
+        <div class="form-group">
+          <label>Direction *</label>
+          <select id="f-direction" class="form-input">
+            <option value="long">🟢 Long (Buy)</option>
+            <option value="short">🔴 Short (Sell)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Prix d'entrée *</label>
+          <input type="number" id="f-entry" class="form-input" step="any" required/>
+        </div>
+        <div class="form-group">
+          <label>Stop Loss</label>
+          <input type="number" id="f-sl" class="form-input" step="any"/>
+        </div>
+        <div class="form-group">
+          <label>Take Profit</label>
+          <input type="number" id="f-tp" class="form-input" step="any"/>
+        </div>
+        <div class="form-group">
+          <label>Prix de sortie</label>
+          <input type="number" id="f-exit" class="form-input" step="any"/>
+        </div>
+        <div class="form-group">
+          <label>Taille (lots)</label>
+          <input type="number" id="f-size" class="form-input" step="any" min="0"/>
+        </div>
+        <div class="form-group">
+          <label>P&L ($)</label>
+          <input type="number" id="f-pnl" class="form-input" step="any"/>
+        </div>
+        <div class="form-group">
+          <label>Ratio R:R</label>
+          <input type="number" id="f-rr" class="form-input" step="0.01"/>
+        </div>
+        <div class="form-group">
+          <label>Résultat</label>
+          <select id="f-result" class="form-input">
+            <option value="win">✅ Gain</option>
+            <option value="loss">❌ Perte</option>
+            <option value="be">➖ Break-even</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Stratégie</label>
+          <input type="text" id="f-strategy" class="form-input" placeholder="Breakout, Scalping…"/>
+        </div>
+        <div class="form-group full-span">
+          <label>Notes</label>
+          <textarea id="f-notes" class="form-input" rows="3" placeholder="Observations, erreurs, leçons…"></textarea>
+        </div>
+        <div class="form-group full-span">
+          <label>Screenshot URL</label>
+          <input type="url" id="f-screenshot" class="form-input" placeholder="https://…"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="cancel-trade-btn" class="btn-secondary">Annuler</button>
+      <button id="save-trade-btn" class="btn-primary">💾 Sauvegarder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST ═══════════════ -->
+<div id="toast" class="toast hidden"></div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

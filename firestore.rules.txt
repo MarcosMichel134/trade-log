@@ -1,0 +1,54 @@
+// ════════════════════════════════════════════════════════
+//  FIRESTORE SECURITY RULES
+//  Copiez ces règles dans :
+//  Firebase Console > Firestore > Onglet "Règles"
+// ════════════════════════════════════════════════════════
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Fonction helper : vérifie si l'utilisateur est admin
+    function isAdmin() {
+      return request.auth != null &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    // ── Fonction helper : vérifie si l'abonnement est valide
+    function canEdit(uid) {
+      let user = get(/databases/$(database)/documents/users/$(uid)).data;
+      return user.subStatus == 'trial' || user.subStatus == 'active';
+    }
+
+    // ── Profils utilisateurs
+    match /users/{uid} {
+      // Un utilisateur peut lire et modifier son propre profil
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && (
+        request.auth.uid == uid ||
+        isAdmin()
+      );
+      // L'admin peut lire tous les profils
+      allow read: if isAdmin();
+      allow list: if isAdmin();
+
+      // ── Trades (sous-collection)
+      match /trades/{tradeId} {
+        allow read: if request.auth != null && (
+          request.auth.uid == uid || isAdmin()
+        );
+        allow create, update, delete: if request.auth != null && (
+          (request.auth.uid == uid && canEdit(uid)) ||
+          isAdmin()
+        );
+      }
+    }
+
+    // ── Performances admin (visibles par tous les connectés, modifiables par admin)
+    match /adminPerformances/{docId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+  }
+}
